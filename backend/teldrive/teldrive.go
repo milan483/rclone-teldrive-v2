@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"path"
@@ -1335,7 +1336,10 @@ func (f *Fs) Copy(ctx context.Context, src fs.Object, remote string) (fs.Object,
 	return f.newObjectWithInfo(ctx, remote, &info)
 }
 
-// About gets quota information
+// About gets the used space reported by TelDrive.
+//
+// TelDrive's categories endpoint does not report account quota, total
+// capacity, or free space, so those Usage fields are deliberately left nil.
 func (f *Fs) About(ctx context.Context) (usage *fs.Usage, err error) {
 	opts := rest.Opts{
 		Method: "GET",
@@ -1347,14 +1351,28 @@ func (f *Fs) About(ctx context.Context) (usage *fs.Usage, err error) {
 		return shouldRetry(ctx, resp, err)
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to read user info: %w", err)
+		return nil, fmt.Errorf("failed to read storage statistics: %w", err)
 	}
 
-	total := int64(0)
-	for category := range stats {
-		total += stats[category].TotalSize
+	return usageFromCategoryStats(stats), nil
+}
+
+// usageFromCategoryStats aggregates the additive category sizes returned by
+// TelDrive. A missing size makes the aggregate incomplete, so it is not
+// exposed as a possibly misleading zero or partial quota value.
+func usageFromCategoryStats(stats []api.CategorySize) *fs.Usage {
+	if len(stats) == 0 {
+		return &fs.Usage{Used: fs.NewUsageValue(int64(0))}
 	}
-	return &fs.Usage{Used: fs.NewUsageValue(total)}, nil
+
+	var used int64
+	for _, category := range stats {
+		if category.TotalSize == nil || *category.TotalSize < 0 || used > math.MaxInt64-*category.TotalSize {
+			return &fs.Usage{}
+		}
+		used += *category.TotalSize
+	}
+	return &fs.Usage{Used: fs.NewUsageValue(used)}
 }
 
 // Fs returns the parent Fs
