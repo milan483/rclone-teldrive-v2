@@ -2,8 +2,6 @@ package teldrive
 
 import (
 	"testing"
-
-	"github.com/rclone/rclone/backend/teldrive/api"
 )
 
 func TestMockAbout(t *testing.T) {
@@ -37,7 +35,9 @@ func TestMockAbout(t *testing.T) {
 		t.Fatalf("About used = %+v, want %d", usage, want)
 	}
 
-	var cats []api.CategorySize
+	var cats []struct {
+		TotalSize int64 `json:"totalSize"`
+	}
 	m.getJSON(t, "/api/v1/files/statistics/categories", &cats)
 	if len(cats) < 2 {
 		t.Fatalf("categories = %+v, want more than one", cats)

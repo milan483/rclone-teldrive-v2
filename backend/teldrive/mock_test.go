@@ -588,10 +588,15 @@ func (m *mockTeldrive) handleCategories(w http.ResponseWriter, _ *http.Request) 
 		names = append(names, name)
 	}
 	slices.Sort(names)
-	out := make([]api.CategorySize, 0, len(names))
+	type categorySize struct {
+		Category   string `json:"category"`
+		TotalFiles int64  `json:"totalFiles"`
+		TotalSize  int64  `json:"totalSize"`
+	}
+	out := make([]categorySize, 0, len(names))
 	for _, name := range names {
 		a := by[name]
-		out = append(out, api.CategorySize{Category: name, TotalFiles: a.files, TotalSize: a.size})
+		out = append(out, categorySize{Category: name, TotalFiles: a.files, TotalSize: a.size})
 	}
 	writeJSON(w, http.StatusOK, out)
 }
