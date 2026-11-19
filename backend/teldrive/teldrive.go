@@ -1275,6 +1275,18 @@ func (o *Object) Open(ctx context.Context, options ...fs.OpenOption) (in io.Read
 
 	err = o.fs.pacer.Call(func() (bool, error) {
 		resp, err = o.fs.srv.Call(ctx, &opts)
+		if err == nil {
+			err = rest.CheckContentRange(resp, options, o.size)
+			if err != nil {
+				if resp != nil && resp.Body != nil {
+					_ = resp.Body.Close()
+				}
+				if errors.Is(err, fs.ErrorRangeIgnored) {
+					return false, err
+				}
+				return true, fserrors.RetryError(err)
+			}
+		}
 		return shouldRetry(ctx, resp, err)
 	})
 
