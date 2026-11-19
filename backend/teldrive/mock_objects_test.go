@@ -196,9 +196,13 @@ func TestMockOpenRange(t *testing.T) {
 	}
 
 	m.ignoreRange = true
-	got = readAll(t, obj, &fs.RangeOption{Start: 2, End: 5})
-	if !bytes.Equal(got, content) {
-		t.Fatalf("ignoreRange read = %q, want full content", got)
+	reader, err := obj.Open(context.Background(), &fs.RangeOption{Start: 2, End: 5})
+	if reader != nil {
+		_ = reader.Close()
+		t.Fatal("ignored range returned a readable body")
+	}
+	if err == nil {
+		t.Fatal("ignored range succeeded, want an error")
 	}
 }
 

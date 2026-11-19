@@ -26,7 +26,7 @@ type mockPartUpload struct {
 	body []byte
 }
 
-type mockUpload struct {
+type zeroChunkUpload struct {
 	request  api.UploadCreateRequest
 	parts    map[int]mockPartUpload
 	complete bool
@@ -44,7 +44,7 @@ type mockTeldriveServer struct {
 	server   *httptest.Server
 	mu       sync.Mutex
 	partSize int64
-	uploads  map[string]*mockUpload
+	uploads  map[string]*zeroChunkUpload
 	files    []api.FileInfo
 	nextID   int
 }
@@ -52,11 +52,11 @@ type mockTeldriveServer struct {
 func newMockTeldriveServer(partSize int64) *mockTeldriveServer {
 	m := &mockTeldriveServer{
 		partSize: partSize,
-		uploads:  make(map[string]*mockUpload),
+		uploads:  make(map[string]*zeroChunkUpload),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/me", func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, api.Session{UserName: "test", UserId: 42})
+		writeZeroChunkJSON(w, api.Session{UserName: "test", UserId: 42})
 	})
 	mux.HandleFunc("POST /api/v1/uploads", func(w http.ResponseWriter, r *http.Request) {
 		var req api.UploadCreateRequest
@@ -67,9 +67,9 @@ func newMockTeldriveServer(partSize int64) *mockTeldriveServer {
 		m.mu.Lock()
 		m.nextID++
 		id := fmt.Sprintf("upload-%d", m.nextID)
-		m.uploads[id] = &mockUpload{request: req, parts: make(map[int]mockPartUpload)}
+		m.uploads[id] = &zeroChunkUpload{request: req, parts: make(map[int]mockPartUpload)}
 		m.mu.Unlock()
-		writeJSON(w, api.UploadSession{
+		writeZeroChunkJSON(w, api.UploadSession{
 			ID:           id,
 			ParentID:     req.ParentID,
 			Name:         req.Name,
@@ -102,7 +102,7 @@ func newMockTeldriveServer(partSize int64) *mockTeldriveServer {
 			})
 		}
 		m.mu.Unlock()
-		writeJSON(w, api.UploadPartList{Items: items})
+		writeZeroChunkJSON(w, api.UploadPartList{Items: items})
 	})
 	mux.HandleFunc("PUT /api/v1/uploads/{id}/parts/{part}", func(w http.ResponseWriter, r *http.Request) {
 		partNo, err := strconv.Atoi(r.PathValue("part"))
@@ -125,7 +125,7 @@ func newMockTeldriveServer(partSize int64) *mockTeldriveServer {
 			http.NotFound(w, r)
 			return
 		}
-		writeJSON(w, api.UploadPart{
+		writeZeroChunkJSON(w, api.UploadPart{
 			UploadID:  r.PathValue("id"),
 			PartNo:    partNo,
 			State:     "stored",
@@ -150,13 +150,13 @@ func newMockTeldriveServer(partSize int64) *mockTeldriveServer {
 			http.NotFound(w, r)
 			return
 		}
-		writeJSON(w, file)
+		writeZeroChunkJSON(w, file)
 	})
 	mux.HandleFunc("GET /api/v1/files", func(w http.ResponseWriter, _ *http.Request) {
 		m.mu.Lock()
 		files := append([]api.FileInfo(nil), m.files...)
 		m.mu.Unlock()
-		writeJSON(w, api.ReadMetadataResponse{Files: files})
+		writeZeroChunkJSON(w, api.ReadMetadataResponse{Files: files})
 	})
 	m.server = httptest.NewServer(mux)
 	return m
@@ -180,7 +180,7 @@ func (m *mockTeldriveServer) snapshot() map[string]mockUploadState {
 	return out
 }
 
-func writeJSON(w http.ResponseWriter, v any) {
+func writeZeroChunkJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(v); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
