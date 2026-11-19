@@ -177,7 +177,7 @@ type FileShareCreate struct {
 type CategorySize struct {
 	Category   string `json:"category"`
 	TotalFiles int64  `json:"totalFiles"`
-	TotalSize  int64  `json:"totalSize"`
+	TotalSize  *int64 `json:"totalSize"`
 }
 
 type EventSource struct {
