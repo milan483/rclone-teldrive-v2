@@ -31,6 +31,25 @@ type uploadInfo struct {
 	dir            string
 }
 
+// validateUploadSession checks that the server returned a usable upload
+// session. Encryption requests must be acknowledged by the server before the
+// session can be used for uploading encrypted data.
+func validateUploadSession(session *api.UploadSession, encryptionRequested bool) error {
+	if session == nil {
+		return fmt.Errorf("upload session is missing")
+	}
+	if session.ID == "" {
+		return fmt.Errorf("upload session is invalid: missing session ID")
+	}
+	if encryptionRequested && session.PartSize <= 0 {
+		return fmt.Errorf("upload session is invalid: missing or invalid part size %d", session.PartSize)
+	}
+	if encryptionRequested && !session.Encryption {
+		return fmt.Errorf("encryption upload session is invalid: server did not enable encryption")
+	}
+	return nil
+}
+
 type objectChunkWriter struct {
 	f          *Fs
 	src        fs.ObjectInfo
@@ -112,6 +131,9 @@ func (o *Object) prepareUpload(ctx context.Context, remote string, src fs.Object
 		return shouldRetry(ctx, resp, err)
 	})
 	if err != nil {
+		return nil, fmt.Errorf("create upload: %w", err)
+	}
+	if err := validateUploadSession(&session, payload.Encryption); err != nil {
 		return nil, fmt.Errorf("create upload: %w", err)
 	}
 	chunkSize := session.PartSize
