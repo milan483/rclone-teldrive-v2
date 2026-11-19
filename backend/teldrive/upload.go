@@ -116,7 +116,7 @@ func (o *Object) prepareUpload(ctx context.Context, remote string, src fs.Object
 		return nil, err
 	}
 	payload := api.UploadCreateRequest{
-		ParentID: directoryID, Name: leaf, Size: src.Size(), MimeType: fs.MimeType(ctx, src),
+		ParentID: directoryID, Name: o.fs.opt.Enc.FromStandardName(leaf), Size: src.Size(), MimeType: fs.MimeType(ctx, src),
 		ModTime: src.ModTime(ctx).UTC(), Encryption: o.fs.opt.EncryptFiles,
 		ConflictPolicy: "replace", PreferredPartSize: int64(o.fs.opt.ChunkSize),
 	}

@@ -566,7 +566,7 @@ func (f *Fs) newObjectWithInfo(_ context.Context, remote string, info *api.FileI
 		id:       info.Id,
 		size:     info.Size,
 		parentId: info.ParentId,
-		name:     info.Name,
+		name:     f.opt.Enc.ToStandardName(info.Name),
 		modTime:  info.ModTime,
 		mimeType: info.MimeType,
 		hash: func() string {
@@ -604,6 +604,7 @@ func (f *Fs) NewObject(ctx context.Context, remote string) (fs.Object, error) {
 }
 
 func (f *Fs) findObject(ctx context.Context, pathID, leaf string) ([]api.FileInfo, error) {
+	apiLeaf := f.opt.Enc.FromStandardName(leaf)
 	params := url.Values{"limit": []string{"200"}, "sort": []string{"id"}}
 	if pathID != "" {
 		params.Set("parentId", pathID)
@@ -620,7 +621,7 @@ func (f *Fs) findObject(ctx context.Context, pathID, leaf string) ([]api.FileInf
 			return nil, err
 		}
 		for _, item := range info.Files {
-			if item.Name == leaf {
+			if item.Name == apiLeaf {
 				found = append(found, item)
 			}
 		}
@@ -631,6 +632,7 @@ func (f *Fs) findObject(ctx context.Context, pathID, leaf string) ([]api.FileInf
 	}
 }
 
+// moveTo moves an entry using backend-encoded source and destination leaves.
 func (f *Fs) moveTo(ctx context.Context, id, srcLeaf, dstLeaf, srcDirectoryID, dstDirectoryID string) error {
 
 	if srcDirectoryID != dstDirectoryID {
@@ -931,7 +933,8 @@ func (f *Fs) processSSEEvent(data string, notifyFunc func(string, fs.EntryType))
 		return nil
 	}
 
-	fullPath := path.Join(parentPath, event.Source.Name)
+	eventName := f.opt.Enc.ToStandardName(event.Source.Name)
+	fullPath := path.Join(parentPath, eventName)
 
 	var entryType fs.EntryType
 	switch event.Source.Type {
@@ -946,7 +949,7 @@ func (f *Fs) processSSEEvent(data string, notifyFunc func(string, fs.EntryType))
 	// Handle move events - notify both old and new locations
 	if event.Type == "files.moved" && event.Source.DestParentId != "" {
 		if newParentPath, ok := f.dirCache.GetInv(event.Source.DestParentId); ok {
-			newPath := path.Join(newParentPath, event.Source.Name)
+			newPath := path.Join(newParentPath, eventName)
 			fs.Debugf(f, "SSE move event: new path %s", newPath)
 			notifyFunc(newPath, entryType)
 		}
@@ -1012,7 +1015,7 @@ func (f *Fs) CreateDir(ctx context.Context, pathID, leaf string) (newID string, 
 		ExtraHeaders: map[string]string{"Idempotency-Key": stableUUID("mkdir:" + pathID + ":" + leaf)},
 	}
 	mkdir := api.FolderCreateRequest{
-		Name: leaf, ParentID: pathID, ConflictPolicy: "fail",
+		Name: f.opt.Enc.FromStandardName(leaf), ParentID: pathID, ConflictPolicy: "fail",
 	}
 	info := api.FileInfo{}
 	err = f.pacer.Call(func() (bool, error) {
@@ -1110,13 +1113,14 @@ func (f *Fs) Move(ctx context.Context, src fs.Object, remote string) (fs.Object,
 		return nil, err
 	}
 
-	err = f.moveTo(ctx, srcObj.id, srcLeaf, dstLeaf, srcParentID, directoryID)
+	err = f.moveTo(ctx, srcObj.id, srcObj.fs.opt.Enc.FromStandardName(srcLeaf), f.opt.Enc.FromStandardName(dstLeaf), srcParentID, directoryID)
 	if err != nil {
 		return nil, err
 	}
 	f.dirCache.FlushDir(src.Remote())
 	newObj := *srcObj
 	newObj.remote = remote
+	newObj.name = dstLeaf
 	newObj.fs = f
 	return &newObj, nil
 }
@@ -1139,7 +1143,7 @@ func (f *Fs) DirMove(ctx context.Context, src fs.Fs, srcRemote, dstRemote string
 	if err != nil {
 		return err
 	}
-	err = f.moveTo(ctx, srcID, srcLeaf, dstLeaf, srcDirectoryID, dstDirectoryID)
+	err = f.moveTo(ctx, srcID, srcFs.opt.Enc.FromStandardName(srcLeaf), f.opt.Enc.FromStandardName(dstLeaf), srcDirectoryID, dstDirectoryID)
 	if err != nil {
 		return fmt.Errorf("dirmove: failed to move: %w", err)
 	}
@@ -1333,7 +1337,7 @@ func (f *Fs) Copy(ctx context.Context, src fs.Object, remote string) (fs.Object,
 	}
 	payload := api.FileCopy{
 		Destination:    directoryID,
-		NewName:        dstLeaf,
+		NewName:        f.opt.Enc.FromStandardName(dstLeaf),
 		UpdatedAt:      srcObj.ModTime(ctx).UTC(),
 		ConflictPolicy: "replace",
 	}
