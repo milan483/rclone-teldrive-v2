@@ -29,12 +29,13 @@ type Part struct {
 	Salt string `json:"salt,omitempty"`
 }
 
-// FileInfo represents a file when listing folder contents
+// FileHash contains the algorithm and value of a file's hash.
 type FileHash struct {
 	Algorithm string `json:"algorithm"`
 	Value     string `json:"value"`
 }
 
+// FileInfo represents a file when listing folder contents.
 type FileInfo struct {
 	Id         string    `json:"id"`
 	Name       string    `json:"name"`
