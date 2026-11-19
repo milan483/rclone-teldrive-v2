@@ -978,7 +978,7 @@ func (f *Fs) OpenChunkWriter(
 	}
 
 	// The v2 API needs the final size when creating an upload session.
-	if src.Size() <= 0 {
+	if src.Size() < 0 {
 		return info, nil, errors.New("chunk writer requires a known size; use rcat --size for streamed uploads")
 	}
 
