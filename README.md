@@ -218,7 +218,16 @@ Higher values can increase upload speed but also increase memory usage and may i
 
 ## Optional encryption
 
-TelDrive native encryption can be enabled with:
+TelDrive native encryption and rclone crypt are different layers:
+
+* `encrypt_files` (`--teldrive-encrypt-files`) is server-side encryption.
+  TelDrive encrypts files before storing them in Telegram, using keys managed
+  by the TelDrive server. The server remains able to decrypt the files.
+* `crypt` is rclone client-side encryption. It encrypts file contents and
+  names with the rclone crypt password and salt before sending them to
+  TelDrive.
+
+Enable TelDrive's native encryption with:
 
 ```text
 --teldrive-encrypt-files
@@ -231,7 +240,58 @@ rclone-teldrive copy ./file.bin teldrive: \
   --teldrive-encrypt-files
 ```
 
-Encryption behavior depends on the TelDrive server configuration.
+This protects data at rest in the TelDrive/Telegram storage path, but it is
+not end-to-end confidentiality from the TelDrive server. For that, layer
+rclone crypt over the TelDrive remote. TelDrive native encryption may also be
+enabled as a second at-rest layer.
+
+### Recommended crypt setup
+
+Create the remotes in this order with `rclone-teldrive config`:
+
+1. Create a TelDrive remote named `teldrive` and set `api_host`, `api_key`,
+   `channel_id`, and optionally `encrypt_files`.
+2. Create a `crypt` remote named `teldrive-crypt`, with `teldrive:` as its
+   underlying remote. Set and record the crypt password and salt.
+3. Use `teldrive-crypt:` for transfers and mounts, rather than `teldrive:`.
+
+The relevant configuration relationship is:
+
+```ini
+[teldrive-crypt]
+type = crypt
+remote = teldrive:
+```
+
+Mount the plain TelDrive remote:
+
+```bash
+mkdir -p ~/mnt/teldrive
+rclone-teldrive mount teldrive: ~/mnt/teldrive --vfs-cache-mode writes
+```
+
+Mount the encrypted remote (recommended for end-to-end confidentiality):
+
+```bash
+mkdir -p ~/mnt/teldrive-crypt
+rclone-teldrive mount teldrive-crypt: ~/mnt/teldrive-crypt --vfs-cache-mode full
+```
+
+Use `--read-only` when the mount must not accept writes:
+
+```bash
+rclone-teldrive mount teldrive-crypt: ~/mnt/teldrive-crypt \
+  --read-only --vfs-cache-mode full
+```
+
+Keep the crypt password and salt safe: losing either can make encrypted data
+and names unrecoverable. Do not change crypt settings after creating files
+unless you are performing an intentional migration. A crypt mount decrypts
+data at the mount point, and its VFS cache can contain plaintext, so protect
+the host, mount directory, and cache. Back up `~/.config/rclone/rclone.conf`
+securely; it contains TelDrive credentials and crypt key material. Do not
+confuse TelDrive's server-side encryption with rclone's client-side crypt
+encryption.
 
 ## BLAKE3 integrity checking
 
