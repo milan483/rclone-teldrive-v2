@@ -6,6 +6,7 @@
 //
 // The TelDrive API follows a flat file model where both files and folders
 // are identified by unique IDs, organized via parentId references.
+// Filename fields contain backend-encoded names, not standard rclone names.
 package api
 
 import "time"
