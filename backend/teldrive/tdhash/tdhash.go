@@ -121,3 +121,17 @@ func SumString(data []byte) string {
 	d.Write(data)
 	return hex.EncodeToString(d.Sum(nil))
 }
+
+// NewBlockHash returns a streaming BLAKE3 hasher for one tree-hash block.
+func NewBlockHash() hash.Hash {
+	return blake3.New()
+}
+
+// SumBlockHashes returns the tree hash for an ordered set of block hashes.
+func SumBlockHashes(blockHashes [][]byte) []byte {
+	h := blake3.New()
+	for _, blockHash := range blockHashes {
+		_, _ = h.Write(blockHash)
+	}
+	return h.Sum(nil)
+}

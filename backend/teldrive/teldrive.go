@@ -177,6 +177,11 @@ Files are split into 16 MiB blocks, each hashed with BLAKE3, then
 the block hashes are combined into a final tree hash. This allows
 rclone to verify upload integrity and detect modifications.
 
+Uploads are compared with the completed file's server hash when it is
+available and uses BLAKE3. Missing or unsupported hashes are skipped with
+a debug message. If the server selects a part size that is not a multiple
+of 16 MiB, parallel uploads use a temporary local file for hashing.
+
 Disable only if the server does not support this hash type.
 `,
 		}, {
